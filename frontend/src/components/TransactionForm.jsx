@@ -1,60 +1,91 @@
-import React, { useState } from 'react';
-import { X, DollarSign, Calendar, Tag, FileText, Loader } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, DollarSign, Calendar, Tag, FileText, Loader, ArrowUpRight, ArrowDownRight, AlertCircle } from 'lucide-react';
 import { useFinance } from '../context/FinanceContext';
 
-const TransactionForm = ({ isOpen, onClose }) => {
-  const { createRecord, loadDashboardData, error } = useFinance();
+const TransactionForm = ({ isOpen, onClose, initialType = 'expense', transaction = null }) => {
+  const { createRecord, updateRecord, loadDashboardData, error } = useFinance();
+  const isEditMode = !!transaction;
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    type: 'expense',
+    type: initialType,
     category: '',
-    date: new Date().toISOString().split('T')[0],
-    paymentMethod: 'other',
-    notes: ''
+    date: new Date().toISOString().split('T')[0]
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset form when modal opens or transaction changes
+  useEffect(() => {
+    if (isOpen) {
+      if (transaction && isEditMode) {
+        // Pre-fill form with transaction data for editing
+        const transactionDate = new Date(transaction.date);
+        setFormData({
+          description: transaction.description || '',
+          amount: transaction.amount || '',
+          type: transaction.type || initialType,
+          category: transaction.category || '',
+          date: transactionDate.toISOString().split('T')[0]
+        });
+      } else {
+        // Reset form for new transaction
+        setFormData({
+          description: '',
+          amount: '',
+          type: initialType,
+          category: '',
+          date: new Date().toISOString().split('T')[0]
+        });
+      }
+    }
+  }, [isOpen, initialType, transaction, isEditMode]);
 
   const categories = {
     expense: ['Food & Dining', 'Transportation', 'Shopping', 'Entertainment', 'Utilities', 'Healthcare', 'Other'],
     income: ['Salary', 'Freelance', 'Investment', 'Business', 'Gift', 'Other']
   };
 
-  const paymentMethods = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'card', label: 'Card' },
-    { value: 'bank_transfer', label: 'Bank Transfer' },
-    { value: 'digital_wallet', label: 'Digital Wallet' },
-    { value: 'other', label: 'Other' }
-  ];
+  const typeLabels = {
+    income: 'Income',
+    expense: 'Expense'
+  };
+
+  const typeColors = {
+    income: 'from-green-500 to-green-600',
+    expense: 'from-red-500 to-red-600'
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     try {
-      await createRecord({
+      const recordData = {
         ...formData,
         amount: parseFloat(formData.amount)
-      });
+      };
+
+      if (isEditMode && transaction?._id) {
+        await updateRecord(transaction._id, recordData);
+      } else {
+        await createRecord(recordData);
+      }
       
-      // Refresh dashboard to show new transaction
+      // Refresh dashboard to show updated/new transaction
       await loadDashboardData();
       
       // Reset form
       setFormData({
         description: '',
         amount: '',
-        type: 'expense',
+        type: initialType,
         category: '',
-        date: new Date().toISOString().split('T')[0],
-        paymentMethod: 'other',
-        notes: ''
+        date: new Date().toISOString().split('T')[0]
       });
       
       onClose();
     } catch (error) {
-      console.error('Failed to create transaction:', error);
+      console.error(`Failed to ${isEditMode ? 'update' : 'create'} transaction:`, error);
     } finally {
       setIsSubmitting(false);
     }
@@ -73,30 +104,40 @@ const TransactionForm = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className={`sticky top-0 bg-gradient-to-r ${typeColors[formData.type]} px-6 py-5 rounded-t-2xl`}>
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Add Transaction</h2>
+            <div className="flex items-center space-x-2">
+              {formData.type === 'income' ? (
+                <ArrowUpRight className="w-6 h-6 text-white" />
+              ) : (
+                <ArrowDownRight className="w-6 h-6 text-white" />
+              )}
+              <h2 className="text-xl font-bold text-white">{isEditMode ? 'Edit' : 'Add'} {typeLabels[formData.type]}</h2>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
+          <p className="text-sm text-white/90 mt-2">{isEditMode ? 'Update transaction details' : 'Quick and easy transaction entry'}</p>
         </div>
 
         <div className="p-6">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start">
+              <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FileText className="w-4 h-4 inline mr-2" />
+              <label className="block text-base font-semibold text-gray-800 mb-2">
+                <FileText className="w-5 h-5 inline mr-2 text-blue-600" />
                 Description
               </label>
               <input
@@ -105,62 +146,38 @@ const TransactionForm = ({ isOpen, onClose }) => {
                 value={formData.description}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter transaction description"
+                className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                placeholder="e.g., Groceries, Salary, etc."
+                autoFocus
               />
             </div>
 
+            {/* Amount - Large and Prominent */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <DollarSign className="w-4 h-4 inline mr-2" />
+              <label className="block text-base font-semibold text-gray-800 mb-2">
+                <DollarSign className="w-5 h-5 inline mr-2 text-blue-600" />
                 Amount
               </label>
-              <input
-                type="number"
-                name="amount"
-                value={formData.amount}
-                onChange={handleChange}
-                required
-                step="0.01"
-                min="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0.00"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type
-              </label>
-              <div className="flex space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="type"
-                    value="expense"
-                    checked={formData.type === 'expense'}
-                    onChange={handleChange}
-                    className="mr-2 text-blue-600"
-                  />
-                  <span className="text-red-600">Expense</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="type"
-                    value="income"
-                    checked={formData.type === 'income'}
-                    onChange={handleChange}
-                    className="mr-2 text-blue-600"
-                  />
-                  <span className="text-green-600">Income</span>
-                </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl font-medium">₹</span>
+                <input
+                  type="number"
+                  name="amount"
+                  value={formData.amount}
+                  onChange={handleChange}
+                  required
+                  step="0.01"
+                  min="0.01"
+                  className="w-full pl-8 pr-4 py-4 text-xl border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  placeholder="0.00"
+                />
               </div>
             </div>
 
+            {/* Category */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Tag className="w-4 h-4 inline mr-2" />
+              <label className="block text-base font-semibold text-gray-800 mb-2">
+                <Tag className="w-5 h-5 inline mr-2 text-blue-600" />
                 Category
               </label>
               <select
@@ -168,7 +185,7 @@ const TransactionForm = ({ isOpen, onClose }) => {
                 value={formData.category}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               >
                 <option value="">Select a category</option>
                 {categories[formData.type].map(category => (
@@ -179,9 +196,10 @@ const TransactionForm = ({ isOpen, onClose }) => {
               </select>
             </div>
 
+            {/* Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar className="w-4 h-4 inline mr-2" />
+              <label className="block text-base font-semibold text-gray-800 mb-2">
+                <Calendar className="w-5 h-5 inline mr-2 text-blue-600" />
                 Date
               </label>
               <input
@@ -190,62 +208,37 @@ const TransactionForm = ({ isOpen, onClose }) => {
                 value={formData.date}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payment Method
-              </label>
-              <select
-                name="paymentMethod"
-                value={formData.paymentMethod}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {paymentMethods.map(method => (
-                  <option key={method.value} value={method.value}>
-                    {method.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes (Optional)
-              </label>
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows="3"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                placeholder="Add any additional notes..."
-              />
-            </div>
-
-            <div className="flex space-x-3 pt-4">
+            <div className="flex space-x-3 pt-6">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                disabled={isSubmitting || !formData.description || !formData.amount || !formData.category}
+                className={`flex-1 px-4 py-3 bg-gradient-to-r ${typeColors[formData.type]} text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-md`}
               >
                 {isSubmitting ? (
                   <>
-                    <Loader className="w-4 h-4 animate-spin mr-2" />
-                    Adding...
+                    <Loader className="w-5 h-5 animate-spin mr-2" />
+                    {isEditMode ? 'Updating...' : 'Adding...'}
                   </>
                 ) : (
-                  'Add Transaction'
+                  <>
+                    {formData.type === 'income' ? (
+                      <ArrowUpRight className="w-5 h-5 mr-2" />
+                    ) : (
+                      <ArrowDownRight className="w-5 h-5 mr-2" />
+                    )}
+                    {isEditMode ? 'Update' : 'Add'} {typeLabels[formData.type]}
+                  </>
                 )}
               </button>
             </div>

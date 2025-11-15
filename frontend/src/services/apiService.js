@@ -38,16 +38,48 @@ class ApiService {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
+      
+      // Try to parse as JSON (backend always returns JSON)
+      let data;
+      try {
+        const text = await response.text();
+        if (text) {
+          data = JSON.parse(text);
+        } else {
+          data = {};
+        }
+      } catch (parseError) {
+        // If JSON parsing fails, create error with status
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status} - Invalid response format`);
+        }
+        throw new Error('Failed to parse response');
+      }
 
       if (!response.ok) {
+        // Handle rate limit errors specifically
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded: Too many requests. Please wait a moment and try again.');
+        }
+        
+        // Handle validation errors with detailed messages
+        if (data.errors && Array.isArray(data.errors)) {
+          const errorMessages = data.errors.map(err => err.msg || err.message).join(', ');
+          throw new Error(errorMessages || data.message || `HTTP error! status: ${response.status}`);
+        }
         throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
 
       return data;
     } catch (error) {
+      // If it's already an Error with message, re-throw it
+      if (error instanceof Error) {
+        console.error(`API request failed: ${endpoint}`, error.message);
+        throw error;
+      }
+      // Otherwise, wrap it in an Error
       console.error(`API request failed: ${endpoint}`, error);
-      throw error;
+      throw new Error(error.message || 'Network error occurred');
     }
   }
 

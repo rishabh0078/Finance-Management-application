@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider } from './context/FinanceContext';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
+import Transactions from './components/Transactions';
 import TransactionForm from './components/TransactionForm';
 import Login from './components/Login';
 
@@ -38,20 +39,7 @@ const MainApp = () => {
       case 'dashboard':
         return <Dashboard />;
       case 'transactions':
-        return (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Transactions</h2>
-              <p className="text-gray-600 mb-6">Detailed transaction management coming soon!</p>
-              <button 
-                onClick={() => setIsTransactionFormOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                Add New Transaction
-              </button>
-            </div>
-          </div>
-        );
+        return <Transactions />;
       case 'budget':
         return (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Edit2, Trash2 } from 'lucide-react';
 import { useFinance } from '../context/FinanceContext';
+import TransactionForm from './TransactionForm';
 
-const RecentTransactions = () => {
-  const { dashboardData } = useFinance();
+const RecentTransactions = ({ onEditTransaction }) => {
+  const { dashboardData, deleteRecord, loadDashboardData } = useFinance();
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   // Get transactions from context or use empty array
   const transactions = dashboardData?.recentRecords || [];
@@ -29,11 +33,35 @@ const RecentTransactions = () => {
 
   const formatAmount = (amount) => {
     const absAmount = Math.abs(amount);
-    return amount >= 0 ? `+$${absAmount.toFixed(2)}` : `-$${absAmount.toFixed(2)}`;
+    return amount >= 0 ? `+₹${absAmount.toFixed(2)}` : `-₹${absAmount.toFixed(2)}`;
   };
 
   const getAmountColor = (amount) => {
     return amount >= 0 ? 'text-green-600' : 'text-red-600';
+  };
+
+  const handleEdit = (transaction) => {
+    setEditingTransaction(transaction);
+    setIsEditModalOpen(true);
+    if (onEditTransaction) {
+      onEditTransaction(transaction);
+    }
+  };
+
+  const handleDelete = async (transactionId) => {
+    if (window.confirm('Are you sure you want to delete this transaction?')) {
+      try {
+        await deleteRecord(transactionId);
+        await loadDashboardData();
+      } catch (error) {
+        console.error('Failed to delete transaction:', error);
+      }
+    }
+  };
+
+  const handleEditClose = () => {
+    setIsEditModalOpen(false);
+    setEditingTransaction(null);
   };
 
   return (
@@ -65,12 +93,12 @@ const RecentTransactions = () => {
             const displayAmount = transaction.type === 'expense' ? -transaction.amount : transaction.amount;
             
             return (
-              <div key={transaction._id} className="flex items-center justify-between p-4 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50/30 rounded-xl transition-all duration-200 group cursor-pointer border border-transparent hover:border-gray-100">
-                <div className="flex items-center space-x-4">
+              <div key={transaction._id} className="flex items-center justify-between p-4 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50/30 rounded-xl transition-all duration-200 group border border-transparent hover:border-gray-100">
+                <div className="flex items-center space-x-4 flex-1">
                   <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm">
                     <span className="text-xl">{getCategoryIcon(transaction.category)}</span>
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{transaction.description}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       <span className="font-medium">{transaction.category}</span>
@@ -79,16 +107,44 @@ const RecentTransactions = () => {
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className={`text-lg font-bold ${getAmountColor(displayAmount)}`}>
-                    {formatAmount(displayAmount)}
-                  </p>
+                <div className="flex items-center space-x-3">
+                  <div className="text-right">
+                    <p className={`text-lg font-bold ${getAmountColor(displayAmount)}`}>
+                      {formatAmount(displayAmount)}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleEdit(transaction)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit transaction"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(transaction._id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete transaction"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           })
         )}
       </div>
+
+      {/* Edit Transaction Modal */}
+      {editingTransaction && (
+        <TransactionForm
+          isOpen={isEditModalOpen}
+          onClose={handleEditClose}
+          transaction={editingTransaction}
+          initialType={editingTransaction.type}
+        />
+      )}
     </div>
   );
 };

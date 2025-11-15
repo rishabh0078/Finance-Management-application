@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import apiService from '../services/apiService';
 
 // Set to true to bypass authentication (for development without MongoDB)
-const BYPASS_AUTH = true;
+const BYPASS_AUTH = false;
 
 // Initial state
 const initialState = BYPASS_AUTH ? {

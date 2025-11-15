@@ -3,7 +3,7 @@ import apiService from '../services/apiService';
 import { useAuth } from './AuthContext';
 
 // Set to true to use mock data (for development without MongoDB)
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 // Initial state
 const initialState = {
@@ -353,7 +353,8 @@ export const FinanceProvider = ({ children }) => {
     if (!isAuthenticated) return;
     
     try {
-      const budgets = await apiService.getBudgets();
+      const response = await apiService.getBudgets();
+      const budgets = response.budgets || response || [];
       dispatch({
         type: FINANCE_ACTIONS.SET_BUDGETS,
         payload: budgets
@@ -362,6 +363,57 @@ export const FinanceProvider = ({ children }) => {
       handleError(error);
     }
   }, [isAuthenticated, handleError]);
+
+  // Create budget
+  const createBudget = useCallback(async (budgetData) => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const response = await apiService.createBudget(budgetData);
+      const newBudget = response.budget || response;
+      
+      // Reload budgets to get updated list
+      await loadBudgets();
+      
+      return newBudget;
+    } catch (error) {
+      handleError(error);
+      throw error;
+    }
+  }, [isAuthenticated, handleError, loadBudgets]);
+
+  // Update budget
+  const updateBudget = useCallback(async (id, budgetData) => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const response = await apiService.updateBudget(id, budgetData);
+      const updatedBudget = response.budget || response;
+      
+      // Reload budgets to get updated list
+      await loadBudgets();
+      
+      return updatedBudget;
+    } catch (error) {
+      handleError(error);
+      throw error;
+    }
+  }, [isAuthenticated, handleError, loadBudgets]);
+
+  // Delete budget
+  const deleteBudget = useCallback(async (id) => {
+    if (!isAuthenticated) return;
+    
+    try {
+      await apiService.deleteBudget(id);
+      
+      // Reload budgets to get updated list
+      await loadBudgets();
+    } catch (error) {
+      handleError(error);
+      throw error;
+    }
+  }, [isAuthenticated, handleError, loadBudgets]);
 
   // Get financial data for AI
   const getFinancialDataForAI = useCallback(async () => {
@@ -393,6 +445,9 @@ export const FinanceProvider = ({ children }) => {
     updateRecord,
     deleteRecord,
     loadBudgets,
+    createBudget,
+    updateBudget,
+    deleteBudget,
     getFinancialDataForAI,
     clearError,
     resetState

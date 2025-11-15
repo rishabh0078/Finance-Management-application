@@ -8,12 +8,15 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   DollarSign,
-  RefreshCw,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import RecentTransactions from './RecentTransactions';
+import TransactionForm from './TransactionForm';
+import BudgetForm from './BudgetForm';
+import BudgetOverview from './BudgetOverview';
+import BudgetGoalTracker from './BudgetGoalTracker';
 import { useFinance } from '../context/FinanceContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -25,17 +28,26 @@ const Dashboard = () => {
     loading, 
     error, 
     loadDashboardData,
-    clearError 
+    clearError,
+    budgets,
+    loadBudgets
   } = useFinance();
 
   // State for month selection and view mode
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'alltime'
+  
+  // State for modals
+  const [transactionModalOpen, setTransactionModalOpen] = useState(false);
+  const [transactionType, setTransactionType] = useState('expense');
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(null);
 
   // Load dashboard data on component mount or when month/view changes
   useEffect(() => {
     loadDashboardData(viewMode === 'monthly' ? selectedDate : null);
-  }, [loadDashboardData, selectedDate, viewMode]);
+    loadBudgets(); // Load budgets for overview
+  }, [loadDashboardData, loadBudgets, selectedDate, viewMode]);
 
   // Month navigation handlers
   const goToPreviousMonth = () => {
@@ -55,16 +67,11 @@ const Dashboard = () => {
   const isCurrentMonth = selectedDate.getMonth() === new Date().getMonth() && 
                          selectedDate.getFullYear() === new Date().getFullYear();
 
-  // Calculate savings rate
-  const savingsRate = balance.income > 0 
-    ? ((balance.income - balance.expense) / balance.income * 100).toFixed(1)
-    : 0;
-
-  // Dynamic stats based on real data and view mode
+  // Dynamic stats based on real data and view mode (3 stats + 1 budget tracker)
   const stats = [
     {
       title: viewMode === 'monthly' ? 'Monthly Savings' : 'Total Balance',
-      value: `$${balance.balance?.toLocaleString() || '0.00'}`,
+      value: `₹${balance.balance?.toLocaleString() || '0.00'}`,
       change: '+2.5%',
       changeType: balance.balance >= 0 ? 'positive' : 'negative',
       icon: <Wallet className="w-6 h-6" />,
@@ -72,26 +79,51 @@ const Dashboard = () => {
     },
     {
       title: viewMode === 'monthly' ? 'Income' : 'Total Income',
-      value: `$${balance.income?.toLocaleString() || '0.00'}`,
+      value: `₹${balance.income?.toLocaleString() || '0.00'}`,
       change: '+8.1%',
       changeType: 'positive',
       icon: <TrendingUp className="w-6 h-6" />
     },
     {
       title: viewMode === 'monthly' ? 'Expenses' : 'Total Expenses',
-      value: `$${balance.expense?.toLocaleString() || '0.00'}`,
+      value: `₹${balance.expense?.toLocaleString() || '0.00'}`,
       change: '-3.2%',
       changeType: 'negative',
       icon: <CreditCard className="w-6 h-6" />
-    },
-    {
-      title: 'Savings Rate',
-      value: `${savingsRate}%`,
-      change: '+5.4%',
-      changeType: savingsRate > 20 ? 'positive' : 'negative',
-      icon: <Target className="w-6 h-6" />
     }
   ];
+
+  // Handler functions for quick actions
+  const handleAddIncome = () => {
+    setTransactionType('income');
+    setTransactionModalOpen(true);
+  };
+
+  const handleAddExpense = () => {
+    setTransactionType('expense');
+    setTransactionModalOpen(true);
+  };
+
+  const handleSetBudget = () => {
+    // Check if there's an existing budget
+    const budgetList = Array.isArray(budgets) ? budgets : [];
+    const activeBudgets = budgetList.filter(b => b.isActive !== false);
+    
+    // Prefer "Overall Budget" if it exists, otherwise use the first active budget
+    const existingBudget = activeBudgets.find(b => 
+      b.category === 'Overall Budget' || b.category === 'Overall'
+    ) || activeBudgets[0];
+    
+    if (existingBudget) {
+      // Open in edit mode with existing budget
+      setEditingBudget(existingBudget);
+    } else {
+      // Open in create mode (no existing budget)
+      setEditingBudget(null);
+    }
+    
+    setBudgetModalOpen(true);
+  };
 
   const quickActions = [
     {
@@ -99,21 +131,21 @@ const Dashboard = () => {
       description: 'Record new income',
       icon: <ArrowUpRight className="w-5 h-5" />,
       color: 'bg-green-500 hover:bg-green-600',
-      action: () => console.log('Add income')
+      action: handleAddIncome
     },
     {
       title: 'Add Expense',
       description: 'Log new expense',
       icon: <ArrowDownRight className="w-5 h-5" />,
       color: 'bg-red-500 hover:bg-red-600',
-      action: () => console.log('Add expense')
+      action: handleAddExpense
     },
     {
       title: 'Set Budget',
       description: 'Create budget plan',
       icon: <DollarSign className="w-5 h-5" />,
       color: 'bg-blue-500 hover:bg-blue-600',
-      action: () => console.log('Set budget')
+      action: handleSetBudget
     }
   ];
 
@@ -216,14 +248,6 @@ const Dashboard = () => {
           </div>
           
           <div className="hidden lg:flex space-x-3">
-            <button
-              onClick={loadDashboardData}
-              disabled={loading}
-              className="bg-white border border-gray-200 hover:border-gray-300 text-gray-700 px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden xl:inline">Refresh</span>
-            </button>
             {quickActions.map((action, index) => (
               <button
                 key={index}
@@ -243,6 +267,8 @@ const Dashboard = () => {
           {stats.map((stat, index) => (
             <StatsCard key={index} {...stat} />
           ))}
+          {/* Budget Goal Tracker - Replaces Savings Rate */}
+          <BudgetGoalTracker />
         </div>
 
         {/* Main Content Grid */}
@@ -254,15 +280,7 @@ const Dashboard = () => {
 
           {/* Budget Overview - Takes 1 column */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-shadow duration-300">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Budget Overview</h3>
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
-                  <Target className="w-5 h-5 text-white" />
-                </div>
-              </div>
-              <p className="text-gray-600 text-sm">Budget tracking coming soon!</p>
-            </div>
+            <BudgetOverview />
           </div>
         </div>
 
@@ -288,6 +306,23 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Transaction Form Modal */}
+      <TransactionForm
+        isOpen={transactionModalOpen}
+        onClose={() => setTransactionModalOpen(false)}
+        initialType={transactionType}
+      />
+
+      {/* Budget Form Modal */}
+      <BudgetForm
+        isOpen={budgetModalOpen}
+        onClose={() => {
+          setBudgetModalOpen(false);
+          setEditingBudget(null);
+        }}
+        budget={editingBudget}
+      />
     </div>
   );
 };

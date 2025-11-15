@@ -12,21 +12,29 @@ dotenv.config();
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
-
-// CORS configuration
+// CORS configuration - MUST be before other middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Security middleware (configured to not interfere with CORS)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
+
+// Rate limiting - More lenient for development
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in development
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));

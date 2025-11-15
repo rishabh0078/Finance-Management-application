@@ -73,8 +73,9 @@ financialRecordSchema.virtual('formattedAmount').get(function() {
 
 // Static method to get user's total balance
 financialRecordSchema.statics.getUserBalance = async function(userId) {
+  const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
   const result = await this.aggregate([
-    { $match: { user: mongoose.Types.ObjectId(userId) } },
+    { $match: { user: userIdObj } },
     {
       $group: {
         _id: '$type',
@@ -97,11 +98,12 @@ financialRecordSchema.statics.getUserBalance = async function(userId) {
 financialRecordSchema.statics.getMonthlySummary = async function(userId, year, month) {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
+  const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
 
-  return await this.aggregate([
+  const result = await this.aggregate([
     {
       $match: {
-        user: mongoose.Types.ObjectId(userId),
+        user: userIdObj,
         date: { $gte: startDate, $lte: endDate }
       }
     },
@@ -113,6 +115,17 @@ financialRecordSchema.statics.getMonthlySummary = async function(userId, year, m
       }
     }
   ]);
+
+  const income = result.find(r => r._id === 'income')?.total || 0;
+  const expense = result.find(r => r._id === 'expense')?.total || 0;
+
+  return {
+    income,
+    expense,
+    balance: income - expense,
+    month: parseInt(month),
+    year: parseInt(year)
+  };
 };
 
 export default mongoose.model('FinancialRecord', financialRecordSchema);

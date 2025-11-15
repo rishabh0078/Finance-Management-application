@@ -139,8 +139,42 @@ router.put('/:id', validateBudget, async (req, res) => {
       return res.status(404).json({ message: 'Budget not found' });
     }
 
-    // Update budget
-    Object.assign(budget, req.body);
+    const { budgetAmount, period, alertThreshold, category } = req.body;
+    
+    // Update fields
+    if (budgetAmount !== undefined) budget.budgetAmount = budgetAmount;
+    if (period !== undefined) budget.period = period;
+    if (alertThreshold !== undefined) budget.alertThreshold = alertThreshold;
+    if (category !== undefined) budget.category = category;
+
+    // If period changed, recalculate start and end dates
+    if (period && period !== budget.period) {
+      const now = new Date();
+      let startDate, endDate;
+
+      switch (period) {
+        case 'weekly':
+          startDate = new Date(now.setDate(now.getDate() - now.getDay()));
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6);
+          break;
+        case 'monthly':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          break;
+        case 'yearly':
+          startDate = new Date(now.getFullYear(), 0, 1);
+          endDate = new Date(now.getFullYear(), 11, 31);
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      }
+
+      budget.startDate = startDate;
+      budget.endDate = endDate;
+    }
+
     await budget.save();
 
     // Update spent amount
